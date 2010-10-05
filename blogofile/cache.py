@@ -1,5 +1,6 @@
 import sys
 
+
 class Cache(dict):
     """A cache object used for attatching things we want to remember
 
@@ -18,6 +19,7 @@ class Cache(dict):
     def __init__(self, **kw):
         dict.__init__(self, kw)
         self.__dict__ = self
+
 
 class HierarchicalCache(Cache):
     """A cache object used for attatching things we want to remember
@@ -55,18 +57,27 @@ class HierarchicalCache(Cache):
                 attr != "trait_names": 
             c = HierarchicalCache()
             Cache.__setitem__(self, attr, c)
+            setattr(c, '_parent', self)
+            setattr(c, '_key', attr)
             return c
         else:
             raise AttributeError
 
     def __getitem__(self, item):
+        if not hasattr(item, 'split'):
+            hierarchy = self._get_hierarchy()
+            raise TypeError("'{0}' object '{1}' is not indexable or sliceable; "
+                    "'{2}' may be an empty cache".format(
+                            self.__class__.__name__,
+                            hierarchy[-1]._key,
+                            ".".join([x._key for x in hierarchy[:-1]])))
         dotted_parts = item.split(".")
         try:
             c = self.__getattribute__(dotted_parts[0])
         except AttributeError:
             c = self.__getattr__(item)
         for dotted_part in dotted_parts[1:]:
-            c = getattr(c,dotted_part)
+            c = getattr(c, dotted_part)
         return c
 
     def __setitem__(self, key, item):
@@ -81,6 +92,24 @@ class HierarchicalCache(Cache):
                 key = dotted_parts[-1]
         finally:
             Cache.__setitem__(c, key, item)
+
+    def __call__(self, *args, **kwargs):
+        hierarchy = self._get_hierarchy()
+        raise TypeError("'{0}' object '{1}' is not callable; "
+                "'{2}' may be an empty cache".format(
+                        self.__class__.__name__,
+                        hierarchy[-1]._key,
+                        ".".join([x._key for x in hierarchy[:-1]])))
+
+    def _get_hierarchy(self):
+        hierarchy = []
+        x = self
+        while hasattr(x, '_parent'):
+            hierarchy.append(x)
+            x = x._parent
+        hierarchy.reverse()
+        return hierarchy
+
 
 #The main blogofile cache object, transfers state between templates
 bf = HierarchicalCache()
